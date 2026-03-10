@@ -1,0 +1,8 @@
+node_modules
+venv
+data
+*.log
+*.sqlite
+*.db
+.git
+.gitignore
