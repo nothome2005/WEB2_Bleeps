@@ -3,9 +3,7 @@ const path = require("path");
 const express = require("express");
 const { initDb } = require("./db");
 const { createHealthRouter } = require("./routes/health");
-const { createAuthRouter } = require("./routes/auth");
 const { createJobsRouter } = require("./routes/jobs");
-const { authMiddleware } = require("./middleware/auth");
 
 const PORT = process.env.PORT || 3000;
 
@@ -20,12 +18,10 @@ async function main() {
   app.use(express.json());
 
   app.use(createHealthRouter());
-  app.use(createAuthRouter());
-  app.use(authMiddleware);
   app.use(createJobsRouter(db));
 
   app.listen(PORT, () => {
-    console.log(`Backend Lab 2 running on http://localhost:${PORT}`);
+    console.log(`Backend Lab 1 running on http://localhost:${PORT}`);
   });
 }
 
