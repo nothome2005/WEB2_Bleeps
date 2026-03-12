@@ -13,6 +13,7 @@ async function initDb() {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS jobs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
       title TEXT NOT NULL,
       description TEXT,
       status TEXT NOT NULL,
@@ -22,6 +23,15 @@ async function initDb() {
       updated_at TEXT NOT NULL
     );
   `);
+
+  const columns = await db.all("PRAGMA table_info(jobs)");
+  const hasUserId = columns.some((column) => column.name === "user_id");
+  if (!hasUserId) {
+    await db.exec("ALTER TABLE jobs ADD COLUMN user_id TEXT");
+    await db.exec("UPDATE jobs SET user_id = 'legacy-user' WHERE user_id IS NULL");
+  }
+
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id)");
 
   return db;
 }
