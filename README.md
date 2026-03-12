@@ -1,11 +1,12 @@
 # Лабораторные WEB 2 семестр
 
-Проект: Лабораторная работа №1 (Backend, CRUD + DB).
+Проект: Лабораторная работа №2 (Backend, JWT auth + data isolation).
 
 - Node.js + Express backend
 - SQLite как хранилище
 - CRUD для сущности `Job` (Create/Read/Update/Delete)
-- Без RabbitMQ, AI, WebSocket, JWT
+- JWT-аутентификация без регистрации и паролей
+- Изоляция jobs по `userId`
 
 ## Run
 
@@ -58,22 +59,30 @@ docker compose down -v
 
 ### Jobs
 
+All `/jobs` endpoints require header:
+
+`Authorization: Bearer <accessToken>`
+
+- `POST /auth/token`
+  - body: `{ "userId": "student-1" }`
+  - returns JWT access token for this user
+
 - `POST /jobs`
   - body: `{ "title": "Job name", "description": "optional" }`
-  - creates job in `CREATED`
+  - creates job in `CREATED` for current `userId`
 
 - `GET /jobs`
-  - list all jobs
+  - list current user's jobs only
 
 - `GET /jobs/:id`
-  - get one job
+  - get one job only if it belongs to current user
 
 - `PUT /jobs/:id`
   - body: `{ "title": "New title", "description": "optional" }`
-  - updates base job fields
+  - updates base job fields for current user's job
 
 - `DELETE /jobs/:id`
-  - removes job by id
+  - removes current user's job by id
 
 - `PATCH /jobs/:id/status`
   - body: `{ "status": "QUEUED|PROCESSING|DONE|ERROR", "result": "...", "error": "..." }`
