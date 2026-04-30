@@ -7,9 +7,9 @@ function sendServiceError(res, error) {
   return res.status(status).json({ error: message });
 }
 
-function createJobsRouter(db) {
+function createJobsRouter(db, broker = null) {
   const router = express.Router();
-  const jobsService = createJobsService(db);
+  const jobsService = createJobsService(db, broker);
 
   router.post("/jobs", async (req, res) => {
     try {

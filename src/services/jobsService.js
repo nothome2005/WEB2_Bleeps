@@ -1,4 +1,5 @@
 const { createJobsRepository } = require("../repositories/jobsRepository");
+const { v4: uuidv4 } = require("uuid");
 
 const STATUSES = {
   CREATED: "CREATED",
@@ -52,8 +53,28 @@ function toJobResponse(row) {
   };
 }
 
-function createJobsService(db) {
+function createJobsService(db, broker = null) {
   const repository = createJobsRepository(db);
+
+  async function publishJobToQueue(jobId, userId, title, idempotencyKey) {
+    if (!broker) {
+      console.warn("[JobsService] Broker not configured, skipping message publish");
+      return;
+    }
+
+    try {
+      await broker.publishMessage({
+        jobId,
+        userId,
+        title,
+        idempotencyKey,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("[JobsService] Failed to publish job to queue:", error);
+      throw createHttpError(500, "Failed to queue job for processing");
+    }
+  }
 
   return {
     async create(userId, payload) {
@@ -69,12 +90,15 @@ function createJobsService(db) {
       }
 
       const now = new Date().toISOString();
+      const idempotencyKey = uuidv4();
+
       const job = await repository.createJob(
         userId,
         normalizedTitle,
         normalizedDescription,
         now,
-        STATUSES.CREATED
+        STATUSES.CREATED,
+        idempotencyKey
       );
       return toJobResponse(job);
     },
@@ -157,6 +181,11 @@ function createJobsService(db) {
         nextError,
         now
       );
+
+      // If transitioning to QUEUED, publish to message broker
+      if (status === STATUSES.QUEUED) {
+        await publishJobToQueue(updated.id, userId, updated.title, updated.idempotency_key);
+      }
 
       return toJobResponse(updated);
     },

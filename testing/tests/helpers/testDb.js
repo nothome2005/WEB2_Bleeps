@@ -1,12 +1,9 @@
-const path = require("path");
 const sqlite3 = require("sqlite3");
 const { open } = require("sqlite");
 
-const DB_FILE = path.join(__dirname, "..", "data", "bleep.db");
-
-async function initDb() {
+async function createTestDb() {
   const db = await open({
-    filename: DB_FILE,
+    filename: ":memory:",
     driver: sqlite3.Database,
   });
 
@@ -25,24 +22,19 @@ async function initDb() {
     );
   `);
 
-  const columns = await db.all("PRAGMA table_info(jobs)");
-  const hasUserId = columns.some((column) => column.name === "user_id");
-  if (!hasUserId) {
-    await db.exec("ALTER TABLE jobs ADD COLUMN user_id TEXT");
-    await db.exec("UPDATE jobs SET user_id = 'legacy-user' WHERE user_id IS NULL");
-  }
-
-  const hasIdempotencyKey = columns.some((column) => column.name === "idempotency_key");
-  if (!hasIdempotencyKey) {
-    await db.exec("ALTER TABLE jobs ADD COLUMN idempotency_key TEXT");
-  }
-
   await db.exec("CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id)");
   await db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_idempotency_key ON jobs(idempotency_key) WHERE idempotency_key IS NOT NULL");
 
   return db;
 }
 
+async function closeTestDb(db) {
+  if (db) {
+    await db.close();
+  }
+}
+
 module.exports = {
-  initDb,
+  createTestDb,
+  closeTestDb,
 };

@@ -1,15 +1,23 @@
 function createJobsRepository(db) {
   return {
-    async createJob(userId, title, description, now, status) {
+    async createJob(userId, title, description, now, status, idempotencyKey = null) {
       const result = await db.run(
         `
-          INSERT INTO jobs (user_id, title, description, status, result, error, created_at, updated_at)
-          VALUES (?, ?, ?, ?, NULL, NULL, ?, ?)
+          INSERT INTO jobs (user_id, title, description, status, result, error, idempotency_key, created_at, updated_at)
+          VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?)
         `,
-        [userId, title, description, status, now, now]
+        [userId, title, description, status, idempotencyKey, now, now]
       );
 
       return db.get("SELECT * FROM jobs WHERE id = ? AND user_id = ?", [result.lastID, userId]);
+    },
+
+    async getJobByIdempotencyKey(userId, idempotencyKey) {
+      if (!idempotencyKey) return null;
+      return db.get(
+        "SELECT * FROM jobs WHERE user_id = ? AND idempotency_key = ?",
+        [userId, idempotencyKey]
+      );
     },
 
     async listJobsByUser(userId) {

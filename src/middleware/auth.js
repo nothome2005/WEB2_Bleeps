@@ -6,7 +6,7 @@ function authMiddleware(req, res, next) {
     return res.status(401).json({ error: "missing or invalid authorization header" });
   }
 
-  const token = authorization.slice(7);
+  const token = authorization.split(" ")[1];
 
   try {
     const payload = verifyAccessToken(token);

@@ -17,6 +17,38 @@ npm start
 
 Server: `http://localhost:3000`
 
+## Testing (Lab 2)
+
+Тесты вынесены в отдельный контур `testing/`, чтобы не смешиваться с production-кодом.
+
+Установка зависимостей:
+
+```bash
+npm install
+```
+
+Запуск всех тестов:
+
+```bash
+npm test
+```
+
+Отдельные наборы:
+
+```bash
+npm run test:unit
+npm run test:integration
+npm run test:contract
+```
+
+Покрытие и метрики (line/statement/branch/function):
+
+```bash
+npm run test:coverage
+```
+
+HTML-отчет после прогона: `testing/coverage/lcov-report/index.html`
+
 ## Run with Docker
 
 ```bash
