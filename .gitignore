@@ -31,8 +31,19 @@ docker-compose.override.yml
 
 # Exclude non-lab local files
 venv/
-img_to_prompt.py
-requirements.txt
-*.py
-Bleep.7z
+__pycache__/
+
+# Exclude large files
+*.zip
+*.7z
 *.jpg
+
+# Exclude testing and scripts
+testing/
+*.bat
+scripts/
+test_integration.js
+
+# Exclude documentation and defense notes
+*.md
+docs/

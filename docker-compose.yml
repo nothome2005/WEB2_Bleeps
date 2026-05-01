@@ -1,4 +1,23 @@
 services:
+  minio:
+    image: minio/minio:latest
+    container_name: bleep-minio
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    volumes:
+      - bleep_minio_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: bleep-rabbitmq
@@ -19,20 +38,61 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: bleep-backend-lab1
+    container_name: bleep-backend
     ports:
       - "3000:3000"
     environment:
       - PORT=3000
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=bleep-jobs
     volumes:
       - bleep_data:/app/data
     restart: unless-stopped
     depends_on:
       rabbitmq:
         condition: service_healthy
-    links:
-      - rabbitmq
+      minio:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: bleep-worker
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - WORKER_INPUT_DIR=/app/data
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=bleep-jobs
+      - HF_HOME=/app/.cache/huggingface
+    volumes:
+      - bleep_data:/app/data
+      - bleep_hf_cache:/app/.cache/huggingface
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: bleep-frontend
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    depends_on:
+      - backend
 
 volumes:
+  bleep_minio_data:
   bleep_data:
+  bleep_hf_cache:

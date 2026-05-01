@@ -1,5 +1,6 @@
 const express = require("express");
 const { createJobsService } = require("../services/jobsService");
+const { storageService } = require("../services/storageService");
 
 function sendServiceError(res, error) {
   const status = error?.status || 500;
@@ -7,14 +8,43 @@ function sendServiceError(res, error) {
   return res.status(status).json({ error: message });
 }
 
+const PUBLIC_API_BASE = process.env.PUBLIC_API_BASE || "http://localhost:3000";
+
+const multer = require("multer");
+const path = require("path");
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, "../../data"));
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const upload = multer({ storage });
+
 function createJobsRouter(db, broker = null) {
   const router = express.Router();
   const jobsService = createJobsService(db, broker);
 
-  router.post("/jobs", async (req, res) => {
+  function attachDownloadUrl(job) {
+    if (job && (job.result || job.s3Key)) {
+      job.downloadUrl = `${PUBLIC_API_BASE}/jobs/${job.id}/result`;
+    }
+    return job;
+  }
+
+  router.post("/jobs", upload.single("image"), async (req, res) => {
     try {
       const userId = req.auth.userId;
-      const job = await jobsService.create(userId, req.body);
+      const jobData = {
+        title: req.body.title || "Untitled Job",
+        description: req.body.description,
+        imagePath: req.file ? req.file.filename : null,
+      };
+      const job = await jobsService.create(userId, jobData);
       return res.status(201).json(job);
     } catch (error) {
       return sendServiceError(res, error);
@@ -25,7 +55,8 @@ function createJobsRouter(db, broker = null) {
     try {
       const userId = req.auth.userId;
       const jobs = await jobsService.list(userId);
-      return res.json(jobs);
+      const mappedJobs = jobs.map(attachDownloadUrl);
+      return res.json(mappedJobs);
     } catch (error) {
       return sendServiceError(res, error);
     }
@@ -35,7 +66,23 @@ function createJobsRouter(db, broker = null) {
     try {
       const userId = req.auth.userId;
       const job = await jobsService.getById(userId, req.params.id);
-      return res.json(job);
+      return res.json(attachDownloadUrl(job));
+    } catch (error) {
+      return sendServiceError(res, error);
+    }
+  });
+
+  router.get("/jobs/:id/result", async (req, res) => {
+    try {
+      const userId = req.auth.userId;
+      const job = await jobsService.getById(userId, req.params.id);
+      const resultKey = job.result || job.s3Key;
+      if (!resultKey) {
+        return res.status(404).json({ error: "result not found" });
+      }
+
+      const content = await storageService.getObjectText(resultKey);
+      return res.type("text/plain").send(content);
     } catch (error) {
       return sendServiceError(res, error);
     }

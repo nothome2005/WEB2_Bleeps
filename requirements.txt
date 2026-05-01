@@ -1,0 +1,5 @@
+# torch is pre-installed in the base image
+transformers
+pillow
+pika
+boto3

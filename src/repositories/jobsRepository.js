@@ -1,12 +1,12 @@
 function createJobsRepository(db) {
   return {
-    async createJob(userId, title, description, now, status, idempotencyKey = null) {
+    async createJob(userId, title, description, imagePath, now, status, idempotencyKey = null) {
       const result = await db.run(
         `
-          INSERT INTO jobs (user_id, title, description, status, result, error, idempotency_key, created_at, updated_at)
-          VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?)
+          INSERT INTO jobs (user_id, title, description, image_path, status, result, error, idempotency_key, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
         `,
-        [userId, title, description, status, idempotencyKey, now, now]
+        [userId, title, description, imagePath, status, idempotencyKey, now, now]
       );
 
       return db.get("SELECT * FROM jobs WHERE id = ? AND user_id = ?", [result.lastID, userId]);
@@ -41,18 +41,31 @@ function createJobsRepository(db) {
       return db.get("SELECT * FROM jobs WHERE id = ? AND user_id = ?", [id, userId]);
     },
 
+    async updateJobImagePath(id, userId, imagePath, now) {
+      await db.run(
+        `
+          UPDATE jobs
+          SET image_path = ?, updated_at = ?
+          WHERE id = ? AND user_id = ?
+        `,
+        [imagePath, now, id, userId]
+      );
+
+      return db.get("SELECT * FROM jobs WHERE id = ? AND user_id = ?", [id, userId]);
+    },
+
     async deleteJobByIdForUser(id, userId) {
       await db.run("DELETE FROM jobs WHERE id = ? AND user_id = ?", [id, userId]);
     },
 
-    async updateJobStatus(id, userId, status, result, error, now) {
+    async updateJobStatus(id, userId, status, result, error, s3Key, now) {
       await db.run(
         `
           UPDATE jobs
-          SET status = ?, result = ?, error = ?, updated_at = ?
+          SET status = ?, result = ?, error = ?, s3_key = ?, updated_at = ?
           WHERE id = ? AND user_id = ?
         `,
-        [status, result, error, now, id, userId]
+        [status, result, error, s3Key, now, id, userId]
       );
 
       return db.get("SELECT * FROM jobs WHERE id = ? AND user_id = ?", [id, userId]);

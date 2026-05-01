@@ -39,14 +39,29 @@ function normalizeText(value) {
   return value.trim();
 }
 
+function normalizeOptionalText(value) {
+  if (value == null) {
+    return null;
+  }
+
+  const normalized = normalizeText(value);
+  if (normalized == null) {
+    return null;
+  }
+
+  return normalized;
+}
+
 function toJobResponse(row) {
   return {
     id: row.id,
     userId: row.user_id,
     title: row.title,
     description: row.description,
+    imagePath: row.image_path,
     status: row.status,
-    result: row.result,
+    result: row.result ?? row.s3_key ?? null,
+    s3Key: row.s3_key ?? null,
     error: row.error,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -56,7 +71,7 @@ function toJobResponse(row) {
 function createJobsService(db, broker = null) {
   const repository = createJobsRepository(db);
 
-  async function publishJobToQueue(jobId, userId, title, idempotencyKey) {
+  async function publishJobToQueue(jobId, userId, title, imagePath, idempotencyKey) {
     if (!broker) {
       console.warn("[JobsService] Broker not configured, skipping message publish");
       return;
@@ -67,6 +82,7 @@ function createJobsService(db, broker = null) {
         jobId,
         userId,
         title,
+        imagePath,
         idempotencyKey,
         timestamp: new Date().toISOString(),
       });
@@ -78,15 +94,20 @@ function createJobsService(db, broker = null) {
 
   return {
     async create(userId, payload) {
-      const { title, description = null } = payload ?? {};
+      const { title, description = null, imagePath = null } = payload ?? {};
       const normalizedTitle = normalizeText(title);
       if (!normalizedTitle) {
         throw createHttpError(400, "title is required and must be a string");
       }
 
-      const normalizedDescription = description == null ? null : normalizeText(description);
+      const normalizedDescription = normalizeOptionalText(description);
       if (description != null && normalizedDescription == null) {
         throw createHttpError(400, "description must be a string when provided");
+      }
+
+      const normalizedImagePath = normalizeOptionalText(imagePath);
+      if (imagePath != null && !normalizedImagePath) {
+        throw createHttpError(400, "imagePath must be a string when provided");
       }
 
       const now = new Date().toISOString();
@@ -96,6 +117,7 @@ function createJobsService(db, broker = null) {
         userId,
         normalizedTitle,
         normalizedDescription,
+        normalizedImagePath,
         now,
         STATUSES.CREATED,
         idempotencyKey
@@ -179,12 +201,19 @@ function createJobsService(db, broker = null) {
         status,
         nextResult,
         nextError,
+        null,
         now
       );
 
       // If transitioning to QUEUED, publish to message broker
       if (status === STATUSES.QUEUED) {
-        await publishJobToQueue(updated.id, userId, updated.title, updated.idempotency_key);
+        await publishJobToQueue(
+          updated.id,
+          userId,
+          updated.title,
+          updated.image_path,
+          updated.idempotency_key
+        );
       }
 
       return toJobResponse(updated);

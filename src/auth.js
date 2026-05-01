@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 
 const JWT_SECRET = process.env.JWT_SECRET || "lab2-dev-secret-change-me";
-const TOKEN_EXPIRATION = "7d";
+const TOKEN_EXPIRATION = "1h";
 
 function signAccessToken(userId) {
   return jwt.sign({ userId }, JWT_SECRET, {
