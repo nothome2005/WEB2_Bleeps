@@ -8,9 +8,6 @@ function App() {
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [userId, setUserId] = useState(localStorage.getItem('userId') || '');
   
-  // Login State
-  const [inputUserId, setInputUserId] = useState('');
-  
   // App State
   const [jobs, setJobs] = useState([]);
   const [wsStatus, setWsStatus] = useState('disconnected'); // disconnected, connecting, connected
@@ -22,35 +19,43 @@ function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   
+  // Modal State
+  const [modalJob, setModalJob] = useState(null);
+  
   const wsRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Auth flow
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    if (!inputUserId.trim()) return;
-    
-    setIsLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/auth/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: inputUserId })
-      });
-      
-      if (!res.ok) throw new Error('Login failed');
-      
-      const data = await res.json();
-      setToken(data.accessToken);
-      setUserId(data.userId);
-      localStorage.setItem('token', data.accessToken);
-      localStorage.setItem('userId', data.userId);
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setIsLoading(false);
+  // Auth flow (Auto)
+  useEffect(() => {
+    if (!token && !isLoading) {
+      const autoLogin = async () => {
+        setIsLoading(true);
+        try {
+          const generatedId = 'user_' + Math.random().toString(36).substr(2, 9);
+          const currentUserId = localStorage.getItem('userId') || generatedId;
+          
+          const res = await fetch(`${API_BASE}/auth/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentUserId })
+          });
+          
+          if (!res.ok) throw new Error('Login failed');
+          
+          const data = await res.json();
+          setToken(data.accessToken);
+          setUserId(data.userId);
+          localStorage.setItem('token', data.accessToken);
+          localStorage.setItem('userId', data.userId);
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      autoLogin();
     }
-  };
+  }, [token]);
 
   const handleLogout = useCallback(() => {
     setToken('');
@@ -61,12 +66,8 @@ function App() {
     if (wsRef.current) {
       wsRef.current.close();
     }
-  }, []);
-
-  const resetSession = () => {
-    localStorage.clear();
     window.location.reload();
-  };
+  }, []);
 
   // Idle Timeout (10 minutes)
   useEffect(() => {
@@ -302,33 +303,8 @@ function App() {
   if (!token) {
     return (
       <div className="container">
-        <div className="glass-panel login-form">
-          <div className="header" style={{ marginBottom: '1rem' }}>
-            <h1>Bleep AI</h1>
-            <p>Login to continue</p>
-          </div>
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <input 
-              type="text" 
-              className="input-field" 
-              placeholder="Enter User ID (e.g. user123)" 
-              value={inputUserId}
-              onChange={(e) => setInputUserId(e.target.value)}
-              disabled={isLoading}
-            />
-            <button type="submit" className="btn" disabled={isLoading || !inputUserId.trim()}>
-              {isLoading ? 'Logging in...' : 'Login'}
-            </button>
-            <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-              <button 
-                type="button" 
-                onClick={resetSession}
-                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.8rem' }}
-              >
-                Trouble signing in? Reset session
-              </button>
-            </div>
-          </form>
+        <div style={{ textAlign: 'center', padding: '5rem', color: 'var(--text-secondary)' }}>
+          <h2>Initializing Session...</h2>
         </div>
       </div>
     );
@@ -338,14 +314,14 @@ function App() {
     <div className="container">
       <div className="nav-bar">
         <div>
-          <h1 style={{ background: 'linear-gradient(135deg, #fff, #a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0 }}>
-            Bleep AI Dashboard
+          <h1 style={{ margin: 0, color: 'var(--text-primary)', fontWeight: 600 }}>
+            Service Dashboard
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
-            Logged in as <strong>{userId}</strong>
+            Session ID: <strong>{userId}</strong>
           </p>
         </div>
-        <button onClick={handleLogout} className="btn logout-btn">Logout</button>
+        <button onClick={handleLogout} className="btn logout-btn">Reset Session</button>
       </div>
 
       <div className="glass-panel" style={{ marginBottom: '2rem' }}>
@@ -374,8 +350,8 @@ function App() {
           ) : (
             <div className="drop-content">
               <div className="upload-icon">📸</div>
-              <p>Drag & Drop an image here or click to browse</p>
-              <span className="hint">Upload an image to generate its text description</span>
+              <p>Drag & Drop a file here or click to browse</p>
+              <span className="hint">Upload a file to process its content</span>
             </div>
           )}
         </div>
@@ -383,7 +359,7 @@ function App() {
         {selectedFile && (
           <div className="upload-actions">
             <button onClick={createJob} className="btn generate-btn" disabled={isLoading}>
-              {isLoading ? 'Processing...' : 'Recognize Image'}
+              {isLoading ? 'Processing...' : 'Upload & Process'}
             </button>
             <button onClick={() => { setSelectedFile(null); setPreviewUrl(null); }} className="btn-secondary" disabled={isLoading}>
               Cancel
@@ -403,9 +379,14 @@ function App() {
               </div>
             </div>
             
-            <div className="job-image-preview">
+            <div className="job-image-preview" onClick={() => job.imagePath && setModalJob(job)}>
               {job.imagePath ? (
-                <img src={`${API_BASE}/data/${job.imagePath}`} alt="Job" />
+                <>
+                  <img src={`${API_BASE}/data/${job.imagePath}`} alt="Job" />
+                  <div className="zoom-overlay">
+                    <span className="zoom-icon">🔍</span>
+                  </div>
+                </>
               ) : (
                 <div className="no-image">No Image</div>
               )}
@@ -419,7 +400,7 @@ function App() {
             
             {job.status === 'DONE' && job.downloadUrl && (
               <div className="result-area">
-                <p className="result-label">Recognition Result:</p>
+                <p className="result-label">Result:</p>
                 <div className="result-text">
                   <ResultContent url={job.downloadUrl} token={token} />
                 </div>
@@ -461,6 +442,25 @@ function App() {
         {wsStatus === 'connected' ? 'Real-time Active' : 
          wsStatus === 'connecting' ? 'Connecting...' : 'Disconnected (REST Fallback)'}
       </div>
+
+      {modalJob && (
+        <div className="modal-overlay" onClick={() => setModalJob(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setModalJob(null)}>×</button>
+            <div className="modal-image-container">
+              <img src={`${API_BASE}/data/${modalJob.imagePath}`} alt="Full size" className="modal-image" />
+            </div>
+            {modalJob.status === 'DONE' && modalJob.downloadUrl && (
+              <div className="modal-prompt">
+                <p className="result-label">Result:</p>
+                <div className="result-text">
+                  <ResultContent url={modalJob.downloadUrl} token={token} />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

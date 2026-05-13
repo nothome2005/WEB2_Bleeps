@@ -3,3 +3,4 @@ transformers
 pillow
 pika
 boto3
+safetensors
